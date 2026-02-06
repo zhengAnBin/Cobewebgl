@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cobe 风格点阵地球 - 可调参数</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      background: #0a0e17;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+    }
+    #canvas:active { cursor: grabbing; }
+
+    /* 控制面板 */
+    .controls {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 24px;
+      min-width: 280px;
+      color: #e6edf3;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    .controls h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #58a6ff;
+      letter-spacing: 0.5px;
+    }
+    .control-group {
+      margin-bottom: 18px;
+    }
+    .control-group:last-child {
+      margin-bottom: 0;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .control-label span:first-child {
+      color: #8b949e;
+    }
+    .control-value {
+      color: #58a6ff;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      min-width: 50px;
+      text-align: right;
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #58a6ff;
+      border: 2px solid #0a0e17;
+      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.6);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #58a6ff;
+      border: 2px solid #0a0e17;
+      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+      cursor: pointer;
+    }
+    .hint {
+      font-size: 11px;
+      color: #484f58;
+      margin-top: 4px;
+    }
+    /* 颜色选择器行 */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .color-row label {
+      color: #8b949e;
+      font-size: 13px;
+      flex: 1;
+    }
+    input[type="color"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 32px;
+      height: 32px;
+      border: 2px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 2px;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 4px;
+    }
+    input[type="color"]::-moz-color-swatch {
+      border: none;
+      border-radius: 4px;
+    }
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.06);
+      margin: 16px 0;
+    }
+    /* 开关 */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .slider {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .switch .slider::before {
+      content: '';
+      position: absolute;
+      left: 2px; top: 2px;
+      width: 16px; height: 16px;
+      background: #8b949e;
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .switch input:checked + .slider {
+      background: rgba(88, 166, 255, 0.3);
+    }
+    .switch input:checked + .slider::before {
+      transform: translateX(16px);
+      background: #58a6ff;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div class="controls">
+    <h3>Cobe Dotted Globe</h3>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>点密集度 (Density)</span>
+        <span class="control-value" id="densityValue">1800</span>
+      </div>
+      <input type="range" id="densitySlider" min="200" max="6000" step="50" value="1800">
+      <div class="hint">斐波那契点阵总点数，越大越密集</div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>点大小 (Dot Size)</span>
+        <span class="control-value" id="dotSizeValue">0.008</span>
+      </div>
+      <input type="range" id="dotSizeSlider" min="0.001" max="0.030" step="0.001" value="0.008">
+      <div class="hint">每个点的半径，越大点越大</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="control-group">
+      <div class="color-row">
+        <label>点阵颜色 (Dot Color)</label>
+        <input type="color" id="dotColorPicker" value="#66ccff">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="color-row">
+        <label>地球底色 (Globe Color)</label>
+        <input type="color" id="baseColorPicker" value="#0f1a33">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="color-row">
+        <label>边缘发光 (Glow Color)</label>
+        <input type="color" id="glowColorPicker" value="#2666d9">
+        <label class="switch">
+          <input type="checkbox" id="glowToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
