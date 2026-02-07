@@ -41,8 +41,9 @@ const FRAGMENT_SHADER = `
   uniform float u_debug;      // 诊断模式: 0=正常, 1=所有点(跳过纹理), 2=显示UV, 3=显示纹理采样值
 
   // ★ 用户可调参数 ★
-  uniform float u_dots;     // 斐波那契点阵总点数（密集度）
-  uniform float u_dotSize;  // 每个点的半径（step 阈值）
+  uniform float u_dots;       // 斐波那契点阵总点数（密集度）
+  uniform float u_dotSize;    // 每个点的半径（step 阈值）
+  uniform float u_globeRadius; // 球体在画面中的半径 (0~1)，越大球越大
 
   // 常量
   const float PI   = 3.14159265359;
@@ -131,7 +132,7 @@ const FRAGMENT_SHADER = `
     vec2 p = uv * 2. - 1.;
     p.x *= aspect;
 
-    float r = 0.5;
+    float r = u_globeRadius;
     float d2 = dot(p, p);
     float rSquared = r * r;
     float l = d2;
@@ -212,6 +213,7 @@ const ARC_VERTEX_SHADER = `
   uniform float u_phi;
   uniform float u_theta;
   uniform float u_aspect;
+  uniform float u_globeRadius;
   varying float v_z;
 
   mat3 rotateX(float a) {
@@ -227,8 +229,8 @@ const ARC_VERTEX_SHADER = `
     // World -> View: inverse of globe's rotation
     vec3 viewPos = rotateX(-u_theta) * rotateY(-u_phi) * a_arcPos;
     v_z = viewPos.z;
-    // Scale to match globe visual radius (0.5) and convert to clip space
-    gl_Position = vec4(viewPos.x * 0.5 / u_aspect, viewPos.y * 0.5, 0.0, 1.0);
+    // Scale to match globe visual radius and convert to clip space
+    gl_Position = vec4(viewPos.x * u_globeRadius / u_aspect, viewPos.y * u_globeRadius, 0.0, 1.0);
   }
 `;
 
@@ -539,7 +541,7 @@ async function main() {
     'u_phi', 'u_theta',
     'u_baseColor', 'u_glowColor', 'u_dotColor',
     'u_opacity', 'u_glowOn',
-    'u_dots', 'u_dotSize', 'u_debug'
+    'u_dots', 'u_dotSize', 'u_globeRadius', 'u_debug'
   ].forEach(n => loc[n] = gl.getUniformLocation(program, n));
 
   // ── 全屏四边形 ──
@@ -571,7 +573,7 @@ async function main() {
   const arcLoc = {};
   if (arcProgram) {
     arcLoc.a_arcPos  = gl.getAttribLocation(arcProgram, 'a_arcPos');
-    ['u_phi', 'u_theta', 'u_aspect', 'u_arcColor', 'u_arcAlpha'].forEach(
+    ['u_phi', 'u_theta', 'u_aspect', 'u_globeRadius', 'u_arcColor', 'u_arcAlpha'].forEach(
       n => arcLoc[n] = gl.getUniformLocation(arcProgram, n)
     );
   }
@@ -639,10 +641,12 @@ async function main() {
   }
 
   // ── UI 控件绑定 ──
-  const densitySlider  = document.getElementById('densitySlider');
-  const dotSizeSlider  = document.getElementById('dotSizeSlider');
-  const densityValue   = document.getElementById('densityValue');
-  const dotSizeValue   = document.getElementById('dotSizeValue');
+  const densitySlider    = document.getElementById('densitySlider');
+  const dotSizeSlider    = document.getElementById('dotSizeSlider');
+  const globeRadiusSlider = document.getElementById('globeRadiusSlider');
+  const densityValue     = document.getElementById('densityValue');
+  const dotSizeValue     = document.getElementById('dotSizeValue');
+  const globeRadiusValue = document.getElementById('globeRadiusValue');
 
   const dotColorPicker  = document.getElementById('dotColorPicker');
   const baseColorPicker = document.getElementById('baseColorPicker');
@@ -653,8 +657,9 @@ async function main() {
   baseColorPicker.value = rgbToHex(baseColor);
   glowColorPicker.value = rgbToHex(glowColor);
 
-  let dots    = parseFloat(densitySlider.value);
-  let dotSize = parseFloat(dotSizeSlider.value);
+  let dots         = parseFloat(densitySlider.value);
+  let dotSize      = parseFloat(dotSizeSlider.value);
+  let globeRadius  = globeRadiusSlider ? parseFloat(globeRadiusSlider.value) : 0.55;
 
   densitySlider.addEventListener('input', () => {
     dots = parseFloat(densitySlider.value);
@@ -664,6 +669,13 @@ async function main() {
     dotSize = parseFloat(dotSizeSlider.value);
     dotSizeValue.textContent = dotSize.toFixed(3);
   });
+  if (globeRadiusSlider) {
+    if (globeRadiusValue) globeRadiusValue.textContent = globeRadiusSlider.value;
+    globeRadiusSlider.addEventListener('input', () => {
+      globeRadius = parseFloat(globeRadiusSlider.value);
+      if (globeRadiusValue) globeRadiusValue.textContent = globeRadius.toFixed(2);
+    });
+  }
   dotColorPicker.addEventListener('input', () => {
     dotColor = hexToRgb(dotColorPicker.value);
   });
@@ -731,6 +743,7 @@ async function main() {
     gl.uniform1f(loc.u_glowOn, glowOn);
     gl.uniform1f(loc.u_dots, dots);
     gl.uniform1f(loc.u_dotSize, dotSize);
+    gl.uniform1f(loc.u_globeRadius, globeRadius);
     gl.uniform1f(loc.u_debug, window.__GLOBE_DEBUG__ || 0.0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -746,6 +759,7 @@ async function main() {
       gl.uniform1f(arcLoc.u_phi, phi);
       gl.uniform1f(arcLoc.u_theta, theta);
       gl.uniform1f(arcLoc.u_aspect, aspect);
+      gl.uniform1f(arcLoc.u_globeRadius, globeRadius);
 
       // 尝试设置线宽（macOS 通常支持）
       try { gl.lineWidth(2.0); } catch (e) { /* 忽略不支持的平台 */ }
