@@ -466,16 +466,17 @@ class ArcAnimator {
         // 每弧独立颜色（可选），未指定时渲染时用全局 fallback
         const color = arc.color ? parseHexColor(arc.color) : null;
 
-        // 动画时长随距离缩放：越远越长
-        const travelDuration = 1.0 + 1.2 * angularDist;
-        const holdDuration   = 0.4;  // 到达终点后保持整段弧可见的时长
-        const drainDuration  = 0.3 + 0.25 * angularDist;  // 消散时长随弧长增加，长弧不会“还没到就没了”
-        const totalDuration  = travelDuration + holdDuration + drainDuration;
-
         // 尾巴长度：约 30% 的总点数
         const tailLen = Math.max(5, Math.floor(numPoints * 0.3));
+        const headEnd = numPoints - 1;
 
-        return { buffer, numPoints, color, travelDuration, holdDuration, drainDuration, totalDuration, tailLen };
+        // 单一总时长（随弧长），滑行/收进按 head 与 tail 点数比例分配，使头、尾移动速度一致，无停顿感
+        const totalDuration = 1.2 + 1.5 * angularDist;
+        const travelRatio = headEnd / (headEnd + tailLen);
+        const travelDuration = totalDuration * travelRatio;
+        const drainDuration = totalDuration * (1 - travelRatio);
+
+        return { buffer, numPoints, color, travelDuration, drainDuration, totalDuration, tailLen, headEnd };
       });
 
     this.arcDelay = 1.0; // 每条弧交错启动间隔（秒）
@@ -495,34 +496,24 @@ class ArcAnimator {
 
     if (local < 0 || local > arc.totalDuration) return null;
 
-    const N       = arc.numPoints;
     const tailLen = arc.tailLen;
-    const headEnd = N - 1;
+    const headEnd = arc.headEnd;
 
     if (local < arc.travelDuration) {
-      // ── 滑行阶段：弧头从起点滑到终点 ──
-      const p     = local / arc.travelDuration;
-      const eased = 1 - Math.pow(1 - p, 2); // ease-out quadratic
-      const head  = Math.floor(eased * headEnd);
-      const tail  = Math.max(0, head - tailLen);
+      // ── 滑行：线性进度，头匀速到终点（不用 ease-out，避免末端“停一下”） ──
+      const p    = local / arc.travelDuration;
+      const head = Math.min(headEnd, Math.floor(p * (headEnd + 0.9999)));
+      const tail = Math.max(0, head - tailLen);
       const count = head - tail + 1;
       return { startIdx: tail, drawCount: Math.max(2, count), alpha: 1.0 };
     }
 
-    const afterTravel = local - arc.travelDuration;
-    if (afterTravel < arc.holdDuration) {
-      // ── 到达终点后保持：整段弧（头在终点）完整显示一段时间 ──
-      const tail = Math.max(0, headEnd - tailLen);
-      return { startIdx: tail, drawCount: headEnd - tail + 1, alpha: 1.0 };
-    }
-
-    // ── 消散阶段：尾巴追上头 + 淡出（长弧消散更慢） ──
-    const drainP = (afterTravel - arc.holdDuration) / arc.drainDuration;
+    // ── 收进：尾匀速追上终点，与滑行阶段速度一致（同一点/秒），无速度突变 ──
+    const drainP = (local - arc.travelDuration) / arc.drainDuration;
     const tail   = Math.floor((headEnd - tailLen) + tailLen * drainP);
     const count  = headEnd - tail + 1;
     if (count < 2) return null;
-    const alpha = Math.max(0, 1.0 - drainP);
-    return { startIdx: Math.min(tail, headEnd - 1), drawCount: Math.max(2, count), alpha };
+    return { startIdx: Math.min(tail, headEnd - 1), drawCount: Math.max(2, count), alpha: 1.0 };
   }
 }
 
